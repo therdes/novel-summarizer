@@ -68,7 +68,7 @@ def summarize_chapter(chapter_id, prompt):
         print(f"Error summarizing chapter {chapter_id}: {e}")
         return None
 
-def summarize_novel(novel_title, reset=False):
+def summarize_novel(novel_title, reset=False, chapters_limit=None):
     """Summarize chapters of a novel using LLM, with resume capability."""
     novel_id = get_novel_id_by_title(novel_title)
     if not novel_id:
@@ -83,7 +83,11 @@ def summarize_novel(novel_title, reset=False):
         start_index = next((i for i, (_, _, _, summary) in enumerate(chapters) if summary is None), len(chapters))
 
     chapters = get_chapters_by_novel_id(novel_id)
-    for i in range(start_index, len(chapters)):
+    if chapters_limit is not None:
+        end_index = min(start_index + chapters_limit, len(chapters))
+    else:
+        end_index = len(chapters)
+    for i in range(start_index, end_index):
         chapter_id, chapter_title, content, _ = chapters[i]
 
         # Get previous summaries (up to 50)

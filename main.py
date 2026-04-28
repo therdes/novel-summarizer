@@ -32,6 +32,11 @@ def parse_args():
         action='store_true',
         help='重新开始总结，清空现有总结。'
     )
+    parser.add_argument(
+        '--chapters',
+        type=int,
+        help='本次总结的章节数量。'
+    )
     return parser.parse_args()
 
 
@@ -48,7 +53,10 @@ def main():
     args = parse_args()
 
     if args.summarize:
-        summarize_novel(args.title, reset=args.reset)
+        if args.chapters is not None and args.chapters <= 0:
+            print("章节数量必须是正整数。")
+            return
+        summarize_novel(args.title, reset=args.reset, chapters_limit=args.chapters)
     else:
         if not args.path or not args.author:
             print("存储小说需要 --path 和 --author 参数。")
