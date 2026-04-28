@@ -14,6 +14,10 @@ client = OpenAI(
 )
 model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 
+# Pricing configuration (per million tokens in RMB)
+INPUT_TOKEN_PRICE_RMB = float(os.getenv('INPUT_TOKEN_PRICE_RMB', 0.0))
+OUTPUT_TOKEN_PRICE_RMB = float(os.getenv('OUTPUT_TOKEN_PRICE_RMB', 0.0))
+
 DB_PATH = 'novels.db'
 
 def sanitize_llm_response(text):
@@ -21,6 +25,17 @@ def sanitize_llm_response(text):
     if not text:
         return text
     return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE).strip()
+
+def log_llm_request(input_text, output_text, input_tokens, output_tokens, input_cost, output_cost):
+    """Log an LLM request to the database."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO llm_requests (input, output, input_tokens, output_tokens, input_cost, output_cost)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (input_text, output_text, input_tokens, output_tokens, input_cost, output_cost))
+    conn.commit()
+    conn.close()
 
 def get_novel_id_by_title(title):
     """Get novel ID by title."""
@@ -56,7 +71,15 @@ def summarize_chapter(chapter_id, prompt):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5
         )
-        summary = sanitize_llm_response(response.choices[0].message.content.strip())
+        output = response.choices[0].message.content.strip()
+        summary = sanitize_llm_response(output)
+        # Calculate costs
+        input_tokens = response.usage.prompt_tokens
+        output_tokens = response.usage.completion_tokens
+        input_cost = (input_tokens / 1_000_000) * INPUT_TOKEN_PRICE_RMB
+        output_cost = (output_tokens / 1_000_000) * OUTPUT_TOKEN_PRICE_RMB
+        # Log the request
+        log_llm_request(prompt, output, input_tokens, output_tokens, input_cost, output_cost)
         # Store summary in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()

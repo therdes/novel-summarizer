@@ -24,8 +24,18 @@ def init_db():
             FOREIGN KEY (novel_id) REFERENCES novels (id)
         )
     ''')
-    conn.commit()
-    conn.close()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS llm_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            input TEXT NOT NULL,
+            output TEXT,
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            input_cost REAL,
+            output_cost REAL
+        )
+    ''')
 
 def split_chapters(text):
     """Split the novel text into chapters based on regex patterns."""
