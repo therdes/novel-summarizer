@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -14,6 +15,12 @@ client = OpenAI(
 model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 
 DB_PATH = 'novels.db'
+
+def sanitize_llm_response(text):
+    """Remove <think>...</think> tags and their content from LLM responses."""
+    if not text:
+        return text
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE).strip()
 
 def get_novel_id_by_title(title):
     """Get novel ID by title."""
@@ -49,7 +56,7 @@ def summarize_chapter(chapter_id, prompt):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5
         )
-        summary = response.choices[0].message.content.strip()
+        summary = sanitize_llm_response(response.choices[0].message.content.strip())
         # Store summary in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
