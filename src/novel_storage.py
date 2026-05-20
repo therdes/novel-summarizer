@@ -33,9 +33,20 @@ def init_db():
             input_tokens INTEGER,
             output_tokens INTEGER,
             input_cost REAL,
-            output_cost REAL
+            output_cost REAL,
+            api_base_url TEXT,
+            model_name TEXT
         )
     ''')
+    # Add new columns if they don't exist (for migration)
+    try:
+        cursor.execute('ALTER TABLE llm_requests ADD COLUMN api_base_url TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute('ALTER TABLE llm_requests ADD COLUMN model_name TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
 def split_chapters(text):
     """Split the novel text into chapters based on regex patterns."""
