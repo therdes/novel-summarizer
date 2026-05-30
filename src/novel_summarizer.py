@@ -118,30 +118,22 @@ def summarize_novel(novel_title, reset=False, chapters_limit=None):
         prev_summaries = []
         for j in range(max(0, i - 50), i):
             if chapters[j][3]:  # summary exists
-                prev_summaries.append(f"Chapter {j+1} Summary: {chapters[j][3]}")
+                prev_summaries.append(f"[Ch.{j+1}] {chapters[j][3]}")
         prev_summaries_join = "\n".join(prev_summaries)
 
         # Build prompt
-        prompt = f"""
-Role: 资深网文剧情分析师。
-Context: 前面若干章节的剧情简述为：
+        prompt = f"""Role: 资深网文剧情分析师。
+Context: 前面章节剧情简述：
 {prev_summaries_join}
-Task: 结合上述背景，总结本章节的新进展。
+Task: 结合上述背景，用100-200字总结本章新进展。
 Constraints:
-
-字数严格控制在 100-200 字。
-
-重点记录剧情的“状态变化”（例如：修为提升、获得宝物、结识新队友、地图切换）。
-
-如果本章是过渡章，请精炼为一句话，不要为了凑字数而罗列细节。
-
-只需输出总结内容，不要任何额外说明。
-
-本章标题：
-{chapter_title}
+- 纯文本，不加markdown标记
+- 只记状态变化（修为、宝物、队友、地图切换）
+- 过渡章精炼为一句话
+- 只输出总结，无额外说明
+本章标题：{chapter_title}
 本章正文：
-{content}
-        """
+{content}"""
 
         print(f"Summarizing chapter {i+1}: {chapter_title}")
         summary = summarize_chapter(chapter_id, novel_id, prompt)
