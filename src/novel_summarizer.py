@@ -1,5 +1,7 @@
 import os
 import re
+import random
+import time
 import sqlite3
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -145,6 +147,7 @@ Constraints:
             chapters[i] = (chapter_id, chapter_title, content, summary)
             success_count += 1
             print("OK")
+            time.sleep(random.uniform(0.1, 0.5))
         else:
             fail_count += 1
             print("FAIL")
