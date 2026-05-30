@@ -100,12 +100,13 @@ def summarize_novel(novel_title, reset=False, chapters_limit=None):
 
     if reset:
         clear_summaries(novel_id)
-        start_index = 0
-    else:
-        chapters = get_chapters_by_novel_id(novel_id)
-        start_index = next((i for i, (_, _, _, summary) in enumerate(chapters) if summary is None), len(chapters))
 
     chapters = get_chapters_by_novel_id(novel_id)
+
+    if not reset:
+        start_index = next((i for i, (_, _, _, summary) in enumerate(chapters) if summary is None), len(chapters))
+    else:
+        start_index = 0
     if chapters_limit is not None:
         end_index = min(start_index + chapters_limit, len(chapters))
     else:
@@ -145,6 +146,7 @@ Constraints:
         print(f"Summarizing chapter {i+1}: {chapter_title}")
         summary = summarize_chapter(chapter_id, prompt)
         if summary:
+            chapters[i] = (chapter_id, chapter_title, content, summary)
             print(f"Summary: {summary[:100]}...")
         else:
             print("Failed to summarize.")
