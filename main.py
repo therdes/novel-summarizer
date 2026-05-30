@@ -3,6 +3,7 @@ import os
 
 from src.novel_storage import store_novel
 from src.novel_summarizer import summarize_novel
+from src.check_openai import check_openai_availability
 
 
 def parse_args():
@@ -15,7 +16,6 @@ def parse_args():
     )
     parser.add_argument(
         '-t', '--title',
-        required=True,
         help='小说名称。'
     )
     parser.add_argument(
@@ -37,6 +37,11 @@ def parse_args():
         type=int,
         help='本次总结的章节数量。'
     )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help='检查 OpenAI 兼容接口是否可用。'
+    )
     return parser.parse_args()
 
 
@@ -51,6 +56,18 @@ def read_novel_file(file_path):
 
 def main():
     args = parse_args()
+
+    if args.check:
+        available, message = check_openai_availability()
+        if available:
+            print("[OK] OpenAI兼容接口可用。")
+        else:
+            print(f"[FAIL] OpenAI兼容接口不可用: {message}")
+        return
+
+    if not args.title:
+        print("需要 --title 参数。")
+        return
 
     if args.summarize:
         if args.chapters is not None and args.chapters <= 0:

@@ -33,6 +33,6 @@ def check_openai_availability():
 if __name__ == '__main__':
     available, message = check_openai_availability()
     if available:
-        print("✓ OpenAI兼容接口可用。")
+        print("[OK] OpenAI兼容接口可用。")
     else:
-        print(f"✗ OpenAI兼容接口不可用: {message}")
+        print(f"[FAIL] OpenAI兼容接口不可用: {message}")
