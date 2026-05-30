@@ -28,6 +28,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS llm_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            novel_id INTEGER,
             input TEXT NOT NULL,
             output TEXT,
             input_tokens INTEGER,
@@ -35,7 +36,8 @@ def init_db():
             input_cost REAL,
             output_cost REAL,
             api_base_url TEXT,
-            model_name TEXT
+            model_name TEXT,
+            FOREIGN KEY (novel_id) REFERENCES novels (id)
         )
     ''')
     # Add new columns if they don't exist (for migration)
@@ -47,6 +49,12 @@ def init_db():
         cursor.execute('ALTER TABLE llm_requests ADD COLUMN model_name TEXT')
     except sqlite3.OperationalError:
         pass  # Column already exists
+    try:
+        cursor.execute('ALTER TABLE llm_requests ADD COLUMN novel_id INTEGER')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    conn.commit()
+    conn.close()
 
 def split_chapters(text):
     """Split the novel text into chapters based on regex patterns."""
@@ -84,3 +92,67 @@ def store_novel(novel_text, title, author):
     conn.commit()
     conn.close()
     return novel_id
+
+
+def list_novels():
+    """List all novels with title, author, and chapter count."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT n.id, n.title, n.author, COUNT(c.id) AS chapter_count
+        FROM novels n
+        LEFT JOIN chapters c ON c.novel_id = n.id
+        GROUP BY n.id
+        ORDER BY n.id
+    ''')
+    novels = cursor.fetchall()
+    conn.close()
+    return novels
+
+
+def get_novel_stats(title):
+    """Get detailed statistics for a specific novel."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM novels WHERE title = ?', (title,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    novel_id = row[0]
+
+    cursor.execute('''
+        SELECT
+            COUNT(*) AS total_chapters,
+            SUM(CASE WHEN summary IS NOT NULL AND summary != '' THEN 1 ELSE 0 END) AS summarized,
+            AVG(CASE WHEN summary IS NOT NULL AND summary != '' THEN LENGTH(summary) ELSE NULL END) AS avg_summary_length
+        FROM chapters
+        WHERE novel_id = ?
+    ''', (novel_id,))
+    chapter_stats = cursor.fetchone()
+
+    cursor.execute('''
+        SELECT
+            COALESCE(SUM(input_tokens), 0) AS total_input_tokens,
+            COALESCE(SUM(output_tokens), 0) AS total_output_tokens,
+            COALESCE(SUM(input_cost), 0) AS total_input_cost,
+            COALESCE(SUM(output_cost), 0) AS total_output_cost
+        FROM llm_requests
+        WHERE novel_id = ?
+    ''', (novel_id,))
+    token_stats = cursor.fetchone()
+
+    conn.close()
+
+    return {
+        'title': title,
+        'total_chapters': chapter_stats[0],
+        'summarized': chapter_stats[1],
+        'avg_summary_length': chapter_stats[2],
+        'total_input_tokens': token_stats[0],
+        'total_output_tokens': token_stats[1],
+        'total_input_cost': token_stats[2],
+        'total_output_cost': token_stats[3],
+    }

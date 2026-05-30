@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from src.novel_storage import store_novel
+from src.novel_storage import store_novel, list_novels, get_novel_stats
 from src.novel_summarizer import summarize_novel
 from src.check_openai import check_openai_availability
 
@@ -21,6 +21,9 @@ def parse_args():
     summarize_parser.add_argument('-t', '--title', required=True, help='小说名称。')
     summarize_parser.add_argument('--reset', action='store_true', help='重新开始总结，清空现有总结。')
     summarize_parser.add_argument('--chapters', type=int, help='本次总结的章节数量。')
+
+    list_parser = subparsers.add_parser('list', help='列出所有小说，或查看指定小说的统计信息')
+    list_parser.add_argument('-t', '--title', help='小说名称，指定后展示详细统计。')
 
     subparsers.add_parser('check', help='检查 OpenAI 兼容接口是否可用')
 
@@ -48,6 +51,32 @@ def cmd_summarize(args):
     summarize_novel(args.title, reset=args.reset, chapters_limit=args.chapters)
 
 
+def cmd_list(args):
+    if args.title:
+        stats = get_novel_stats(args.title)
+        if stats is None:
+            print(f"未找到小说: {args.title}")
+            return
+        avg_len = f"{stats['avg_summary_length']:.0f}" if stats['avg_summary_length'] else "-"
+        total_cost = stats['total_input_cost'] + stats['total_output_cost']
+        print(f"书名: {stats['title']}")
+        print(f"总章节数: {stats['total_chapters']}")
+        print(f"已总结: {stats['summarized']}  /  未总结: {stats['total_chapters'] - stats['summarized']}")
+        print(f"平均总结字数: {avg_len}")
+        print(f"总输入 Token: {stats['total_input_tokens']:,}")
+        print(f"总输出 Token: {stats['total_output_tokens']:,}")
+        print(f"总费用 (RMB): {total_cost:.4f}")
+    else:
+        novels = list_novels()
+        if not novels:
+            print("暂无小说记录。")
+            return
+        print(f"{'ID':<4} {'书名':<20} {'作者':<15} {'章节数':<6}")
+        print("-" * 48)
+        for novel_id, title, author, chapter_count in novels:
+            print(f"{novel_id:<4} {title:<20} {author:<15} {chapter_count:<6}")
+
+
 def cmd_check(args):
     available, message = check_openai_availability()
     if available:
@@ -63,10 +92,12 @@ def main():
         cmd_store(args)
     elif args.command == 'summarize':
         cmd_summarize(args)
+    elif args.command == 'list':
+        cmd_list(args)
     elif args.command == 'check':
         cmd_check(args)
     else:
-        print("请指定子命令: store | summarize | check")
+        print("请指定子命令: store | summarize | list | check")
         print("使用 --help 查看帮助。")
 
 

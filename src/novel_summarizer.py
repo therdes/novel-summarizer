@@ -26,14 +26,14 @@ def sanitize_llm_response(text):
         return text
     return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE).strip()
 
-def log_llm_request(input_text, output_text, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name):
+def log_llm_request(novel_id, input_text, output_text, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name):
     """Log an LLM request to the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO llm_requests (input, output, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (input_text, output_text, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name))
+        INSERT INTO llm_requests (novel_id, input, output, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (novel_id, input_text, output_text, input_tokens, output_tokens, input_cost, output_cost, api_base_url, model_name))
     conn.commit()
     conn.close()
 
@@ -63,7 +63,7 @@ def clear_summaries(novel_id):
     conn.commit()
     conn.close()
 
-def summarize_chapter(chapter_id, prompt):
+def summarize_chapter(chapter_id, novel_id, prompt):
     """Summarize a chapter using LLM."""
     try:
         response = client.chat.completions.create(
@@ -79,7 +79,7 @@ def summarize_chapter(chapter_id, prompt):
         input_cost = (input_tokens / 1_000_000) * INPUT_TOKEN_PRICE_RMB
         output_cost = (output_tokens / 1_000_000) * OUTPUT_TOKEN_PRICE_RMB
         # Log the request
-        log_llm_request(prompt, output, input_tokens, output_tokens, input_cost, output_cost, str(client.base_url), model)
+        log_llm_request(novel_id, prompt, output, input_tokens, output_tokens, input_cost, output_cost, str(client.base_url), model)
         # Store summary in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -144,7 +144,7 @@ Constraints:
         """
 
         print(f"Summarizing chapter {i+1}: {chapter_title}")
-        summary = summarize_chapter(chapter_id, prompt)
+        summary = summarize_chapter(chapter_id, novel_id, prompt)
         if summary:
             chapters[i] = (chapter_id, chapter_title, content, summary)
             print(f"Summary: {summary[:100]}...")
