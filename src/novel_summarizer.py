@@ -111,6 +111,10 @@ def summarize_novel(novel_title, reset=False, chapters_limit=None):
         end_index = min(start_index + chapters_limit, len(chapters))
     else:
         end_index = len(chapters)
+    total_input_tokens = 0
+    total_output_tokens = 0
+    success_count = 0
+    fail_count = 0
     for i in range(start_index, end_index):
         chapter_id, chapter_title, content, _ = chapters[i]
 
@@ -135,13 +139,24 @@ Constraints:
 本章正文：
 {content}"""
 
-        print(f"Summarizing chapter {i+1}: {chapter_title}")
+        print(f"[{i+1}/{end_index}] {chapter_title} ... ", end='', flush=True)
         summary = summarize_chapter(chapter_id, novel_id, prompt)
         if summary:
             chapters[i] = (chapter_id, chapter_title, content, summary)
-            print(f"Summary: {summary[:100]}...")
+            success_count += 1
+            print("OK")
         else:
-            print("Failed to summarize.")
+            fail_count += 1
+            print("FAIL")
 
-    print("Summarization complete.")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+        FROM llm_requests WHERE novel_id = ?
+    ''', (novel_id,))
+    total_input_tokens, total_output_tokens = cursor.fetchone()
+    conn.close()
+
+    print(f"\n总结完成: 成功 {success_count} 章, 失败 {fail_count} 章, 输入 {total_input_tokens:,} tokens, 输出 {total_output_tokens:,} tokens")
     
