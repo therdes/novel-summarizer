@@ -53,6 +53,20 @@ def init_db():
         cursor.execute('ALTER TABLE llm_requests ADD COLUMN novel_id INTEGER')
     except sqlite3.OperationalError:
         pass  # Column already exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rewrites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            novel_id INTEGER NOT NULL,
+            batch_index INTEGER NOT NULL,
+            chapter_start INTEGER NOT NULL,
+            chapter_end INTEGER NOT NULL,
+            target_words INTEGER,
+            content TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (novel_id) REFERENCES novels (id),
+            UNIQUE (novel_id, batch_index)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -177,3 +191,42 @@ def get_all_summaries(title):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+
+def get_rewrite_batches(novel_id):
+    """Return [(batch_index, chapter_start, chapter_end, target_words, content), ...]
+    ordered by batch_index."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT batch_index, chapter_start, chapter_end, target_words, content
+        FROM rewrites WHERE novel_id = ? ORDER BY batch_index
+    ''', (novel_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def save_rewrite_batch(novel_id, batch_index, chapter_start, chapter_end, target_words, content):
+    """Insert or replace a rewrite batch."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO rewrites
+            (novel_id, batch_index, chapter_start, chapter_end, target_words, content)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (novel_id, batch_index, chapter_start, chapter_end, target_words, content))
+    conn.commit()
+    conn.close()
+
+
+def clear_rewrites(novel_id):
+    """Delete all rewrite batches for a novel."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM rewrites WHERE novel_id = ?', (novel_id,))
+    conn.commit()
+    conn.close()

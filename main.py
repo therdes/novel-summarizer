@@ -3,6 +3,7 @@ import os
 
 from src.novel_storage import store_novel, list_novels, get_novel_stats, get_all_summaries
 from src.novel_summarizer import summarize_novel
+from src.novel_rewriter import rewrite_novel, DEFAULT_BATCH_COUNT, HARD_WORD_LIMIT
 from src.check_openai import check_openai_availability
 
 
@@ -26,6 +27,16 @@ def parse_args():
     list_parser.add_argument('-t', '--title', help='小说名称，指定后展示详细统计。')
     list_parser.add_argument('--export', nargs='?', const='', default=None,
                              help='导出总结到txt文件，需同时指定 -t。无值则用 "<书名>-summary.txt" 输出到当前目录。')
+
+    rewrite_parser = subparsers.add_parser('rewrite', help='将已完全总结的小说重写为大纲小说')
+    rewrite_parser.add_argument('-t', '--title', required=True, help='小说名称。')
+    rewrite_parser.add_argument('--batch', type=int, default=DEFAULT_BATCH_COUNT,
+                                help=f'批次数，默认 {DEFAULT_BATCH_COUNT}。')
+    rewrite_parser.add_argument('--target-words', type=int,
+                                help=f'目标字数，默认按原文5%%与总结字数估算，上限 {HARD_WORD_LIMIT:,}。')
+    rewrite_parser.add_argument('--reset', action='store_true', help='清空已有重写并重新开始。')
+    rewrite_parser.add_argument('--export', nargs='?', const='', default=None,
+                                help='重写完成后导出到txt文件。无值则用 "<书名>-outline.txt" 输出到当前目录。')
 
     subparsers.add_parser('check', help='检查 OpenAI 兼容接口是否可用')
 
@@ -53,10 +64,8 @@ def cmd_summarize(args):
     summarize_novel(args.title, reset=args.reset, chapters_limit=args.chapters)
 
 
-def _resolve_export_path(export_arg, title):
+def _resolve_export_path(export_arg, default_name):
     """Resolve --export argument to a target file path. Returns None if user cancels."""
-    default_name = f"{title}-summary.txt"
-
     if export_arg == '':
         return os.path.abspath(default_name)
 
@@ -87,7 +96,7 @@ def _export_summaries(title, export_arg):
     if unsummarized > 0:
         print(f"无法导出：还有 {unsummarized} 章未总结，请先完成总结。")
         return
-    target = _resolve_export_path(export_arg, title)
+    target = _resolve_export_path(export_arg, f"{title}-summary.txt")
     if target is None:
         print("已取消导出。")
         return
@@ -138,6 +147,52 @@ def cmd_check(args):
         print(f"[FAIL] OpenAI兼容接口不可用: {message}")
 
 
+def _export_rewrite(title, export_arg):
+    from src.novel_storage import get_rewrite_batches
+    novel_id = None
+    for nid, nt, _, _ in list_novels():
+        if nt == title:
+            novel_id = nid
+            break
+    if novel_id is None:
+        print(f"未找到小说: {title}")
+        return
+    batches = get_rewrite_batches(novel_id)
+    if not batches:
+        print("尚无重写内容，无法导出。")
+        return
+    target = _resolve_export_path(export_arg, f"{title}-outline.txt")
+    if target is None:
+        print("已取消导出。")
+        return
+    with open(target, 'w', encoding='utf-8') as f:
+        for batch_index, start, end, _, content in batches:
+            f.write(content.strip())
+            f.write("\n\n")
+    total_chars = sum(len(c or '') for _, _, _, _, c in batches)
+    print(f"已导出 {len(batches)} 个批次（共 {total_chars:,} 字）到: {target}")
+
+
+def cmd_rewrite(args):
+    if args.batch <= 0:
+        print("批次数必须为正整数。")
+        return
+    if args.target_words is not None and args.target_words <= 0:
+        print("目标字数必须为正整数。")
+        return
+    success, _ = rewrite_novel(
+        args.title,
+        batch_count=args.batch,
+        target_words=args.target_words,
+        reset=args.reset,
+    )
+    if args.export is not None:
+        if not success:
+            print("重写未完成，跳过导出。")
+            return
+        _export_rewrite(args.title, args.export)
+
+
 def main():
     args = parse_args()
 
@@ -147,10 +202,12 @@ def main():
         cmd_summarize(args)
     elif args.command == 'list':
         cmd_list(args)
+    elif args.command == 'rewrite':
+        cmd_rewrite(args)
     elif args.command == 'check':
         cmd_check(args)
     else:
-        print("请指定子命令: store | summarize | list | check")
+        print("请指定子命令: store | summarize | list | rewrite | check")
         print("使用 --help 查看帮助。")
 
 
