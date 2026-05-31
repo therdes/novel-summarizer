@@ -14,7 +14,7 @@
 
 - `.env` required with: `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`.
 - Optional pricing: `INPUT_TOKEN_PRICE_RMB`, `OUTPUT_TOKEN_PRICE_RMB` (per million tokens).
-- `.env` is **not** in `.gitignore` — never commit real keys.
+- `.env` is gitignored; use `.env.example` as template.
 
 ## Architecture
 
