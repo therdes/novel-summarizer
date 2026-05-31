@@ -156,3 +156,24 @@ def get_novel_stats(title):
         'total_input_cost': token_stats[2],
         'total_output_cost': token_stats[3],
     }
+
+
+def get_all_summaries(title):
+    """Return [(chapter_title, summary), ...] ordered by chapter id.
+    Returns None if novel not found. Summary may be None for unsummarized chapters."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM novels WHERE title = ?', (title,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+    novel_id = row[0]
+    cursor.execute(
+        'SELECT chapter_title, summary FROM chapters WHERE novel_id = ? ORDER BY id',
+        (novel_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows

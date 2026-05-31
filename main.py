@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from src.novel_storage import store_novel, list_novels, get_novel_stats
+from src.novel_storage import store_novel, list_novels, get_novel_stats, get_all_summaries
 from src.novel_summarizer import summarize_novel
 from src.check_openai import check_openai_availability
 
@@ -24,6 +24,8 @@ def parse_args():
 
     list_parser = subparsers.add_parser('list', help='列出所有小说，或查看指定小说的统计信息')
     list_parser.add_argument('-t', '--title', help='小说名称，指定后展示详细统计。')
+    list_parser.add_argument('--export', nargs='?', const='', default=None,
+                             help='导出总结到txt文件，需同时指定 -t。无值则用 "<书名>-summary.txt" 输出到当前目录。')
 
     subparsers.add_parser('check', help='检查 OpenAI 兼容接口是否可用')
 
@@ -51,7 +53,58 @@ def cmd_summarize(args):
     summarize_novel(args.title, reset=args.reset, chapters_limit=args.chapters)
 
 
+def _resolve_export_path(export_arg, title):
+    """Resolve --export argument to a target file path. Returns None if user cancels."""
+    default_name = f"{title}-summary.txt"
+
+    if export_arg == '':
+        return os.path.abspath(default_name)
+
+    path = export_arg
+    if os.path.isdir(path):
+        return os.path.join(path, default_name)
+    if os.path.isfile(path):
+        confirm = input(f"文件已存在: {path}，是否覆盖？(yes/no): ")
+        if confirm.strip().lower() != 'yes':
+            return None
+        return path
+    # Path does not exist
+    if path.endswith(('/', '\\')) or path.endswith(os.sep):
+        os.makedirs(path, exist_ok=True)
+        return os.path.join(path, default_name)
+    parent = os.path.dirname(path)
+    if parent and not os.path.isdir(parent):
+        os.makedirs(parent, exist_ok=True)
+    return path
+
+
+def _export_summaries(title, export_arg):
+    summaries = get_all_summaries(title)
+    if summaries is None:
+        print(f"未找到小说: {title}")
+        return
+    unsummarized = sum(1 for _, s in summaries if not s)
+    if unsummarized > 0:
+        print(f"无法导出：还有 {unsummarized} 章未总结，请先完成总结。")
+        return
+    target = _resolve_export_path(export_arg, title)
+    if target is None:
+        print("已取消导出。")
+        return
+    with open(target, 'w', encoding='utf-8') as f:
+        for i, (chapter_title, summary) in enumerate(summaries, 1):
+            f.write(f"{chapter_title}\n\n{summary}\n\n")
+    print(f"已导出 {len(summaries)} 章总结到: {target}")
+
+
 def cmd_list(args):
+    if args.export is not None:
+        if not args.title:
+            print("--export 需要同时指定 -t/--title。")
+            return
+        _export_summaries(args.title, args.export)
+        return
+
     if args.title:
         stats = get_novel_stats(args.title)
         if stats is None:
